@@ -1,0 +1,4 @@
+plant_id,capacity,unit_cost,energy_price,carbon_intensity
+A,6000,18.50,3.20,12.4
+B,5000,22.00,2.80,8.6
+C,3500,25.00,4.10,3.2

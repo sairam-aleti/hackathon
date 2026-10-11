@@ -1,0 +1,2 @@
+event_id,plant_id,capacity_reduction_pct,start_date,end_date,reason
+EV-01,B,0.30,2026-10-15,2026-10-29,Boiler maintenance
