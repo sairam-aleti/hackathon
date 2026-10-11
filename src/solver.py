@@ -681,6 +681,8 @@ def explain_order_choice(
                 "late_days": late_days,
             }
 
+    plant_util = current_allocation.get("kpis", {}).get("plant_utilisation", {})
+
     # Build human-readable reasons for each alternative
     for pid, alt in alternatives.items():
         if pid == chosen_plant:
@@ -699,7 +701,19 @@ def explain_order_choice(
                 reason_parts.append(f"{abs(carbon_delta):,.0f}kg less CO2e")
             if not alt["on_time"]:
                 reason_parts.append(f"misses deadline by {alt['late_days']} days")
-            alt["reason"] = "Plant " + pid + " is " + " but ".join(reason_parts) if reason_parts else "Comparable"
+
+            base_desc = "Plant " + pid + " is " + " and ".join(reason_parts) if reason_parts else f"Plant {pid}"
+            util = float(plant_util.get(pid, 0.0))
+            is_better_locally = (cost_delta < 0 or carbon_delta < 0) and alt["on_time"]
+
+            if is_better_locally:
+                if util >= 0.85:
+                    alt["reason"] = f"{base_desc}, BUT at capacity limit ({util*100:.0f}% utilized; allocated to higher-priority orders)"
+                else:
+                    alt["reason"] = f"{base_desc}, but bypassed to protect global network cost/SLA constraints"
+            else:
+                alt["reason"] = base_desc
+
             alt["cost_delta"] = round(cost_delta, 2)
             alt["carbon_delta"] = round(carbon_delta, 2)
 
