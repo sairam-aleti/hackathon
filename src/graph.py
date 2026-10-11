@@ -88,7 +88,9 @@ def parse_intent(state: GraphState) -> GraphState:
         intent = "scenario"
     elif any(w in q_lower for w in ["brief", "leadership", "management", "summary"]):
         intent = "brief"
-    elif "why" in q_lower and "order" in q_lower:
+    elif any(w in q_lower for w in ["why", "explain", "inspect"]) and ("order" in q_lower or bool(re.search(r'\b(?:o-?|order\s*)(\d{1,4})\b', q_lower))):
+        intent = "explain"
+    elif bool(re.search(r'^\s*(?:o-?)?\d{1,4}\s*$', q_lower)):
         intent = "explain"
     elif any(w in q_lower for w in ["cheapest", "cost only", "cost-only"]):
         intent = "cheapest_plan"
@@ -166,12 +168,17 @@ def run_solver(state: GraphState) -> GraphState:
         solver_res["tradeoff"] = tradeoff_pts
 
         # Always compute counterfactuals for either target order in query or default first order
-        order_match = re.search(r'o-\d+', state.get("user_query", "").lower())
-        target_order = order_match.group(0).upper() if order_match else None
-        if not target_order and solver_res.get("allocation"):
-            target_order = solver_res["allocation"][0]["order_id"]
-        if not target_order:
-            target_order = "O-001"
+        order_match = re.search(r'\b(?:o-?|order\s*)(\d{1,4})\b', state.get("user_query", "").lower())
+        if order_match:
+            target_order = f"O-{int(order_match.group(1)):03d}"
+        else:
+            raw_num_match = re.search(r'\b(\d{1,4})\b', state.get("user_query", ""))
+            if raw_num_match:
+                target_order = f"O-{int(raw_num_match.group(1)):03d}"
+            elif solver_res.get("allocation"):
+                target_order = solver_res["allocation"][0]["order_id"]
+            else:
+                target_order = "O-001"
         solver_res["counterfactuals"] = explain_order_choice(conn, target_order, solver_res)
 
         state["solver_result"] = solver_res

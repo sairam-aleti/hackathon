@@ -18,6 +18,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from src.pdf_generator import generate_allocation_pdf
+from src.database import get_connection
+from src.solver import explain_order_choice
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
@@ -702,20 +704,22 @@ if "last_analysis" in st.session_state:
         # Interactive Order Selector Dropdown
         all_order_ids = [a.get("order_id") for a in allocation if a.get("order_id")] if allocation else []
         if all_order_ids:
-            cur_oid = explain_data.get("order_id") if explain_data else all_order_ids[0]
-            sel_idx = all_order_ids.index(cur_oid) if cur_oid in all_order_ids else 0
-            sel_c1, sel_c2 = st.columns([3, 1])
-            with sel_c1:
-                selected_inspect_oid = st.selectbox(
-                    "Inspect Order Decision Logic",
-                    all_order_ids,
-                    index=sel_idx,
-                    help="Select any order to analyze why the solver chose its plant over alternative facilities.",
-                )
-            with sel_c2:
-                if st.button("Inspect Order", key="tab3_inspect_btn", use_container_width=True):
-                    st.session_state["trigger_query"] = f"Why was order {selected_inspect_oid} assigned to its plant?"
-                    st.rerun()
+            # Match current order or default to first
+            default_oid = explain_data.get("order_id") if explain_data else all_order_ids[0]
+            sel_idx = all_order_ids.index(default_oid) if default_oid in all_order_ids else 0
+            selected_inspect_oid = st.selectbox(
+                "Inspect Order Decision Logic",
+                all_order_ids,
+                index=sel_idx,
+                key="tab3_order_select",
+                help="Select any order to analyze why the solver chose its plant over alternative facilities.",
+            )
+            # Recompute explanation dynamically for the chosen order on the fly
+            try:
+                with get_connection() as conn:
+                    explain_data = explain_order_choice(conn, selected_inspect_oid, data)
+            except Exception as e:
+                pass
 
         if explain_data and "chosen_plant" in explain_data:
             oid = explain_data.get("order_id")
