@@ -248,14 +248,38 @@ def screen_domain_relevance(query: str) -> tuple[bool, Optional[str]]:
     if not q_lower:
         return True, None
 
-    # Intercept ambiguous/incomplete fragments that lack an actionable predicate
-    ambiguous_fragments = {"plan b", "plan a", "plan c", "plant a", "plant b", "plant c", "plant", "orders", "order"}
-    if q_lower in ambiguous_fragments:
-        target_name = "Plant B" if "b" in q_lower else ("Plant A" if "a" in q_lower else ("Plant C" if "c" in q_lower else "a specific facility"))
+    # 1. Check for non-existent facilities (e.g. Plant D, Plant Z, Facility X)
+    invalid_plants = re.findall(r'\b(?:plant|facility|plan)\s+([d-zD-Z])\b', query)
+    if invalid_plants:
+        bad = ", ".join(f"Plant {p.upper()}" for p in sorted(set(invalid_plants)))
         return False, (
-            f"Insufficient information: Ambiguous directive '{query}'. Did you mean {target_name}? "
-            f"Please provide an actionable directive (e.g., '{target_name} loses 30% capacity due to maintenance' or "
-            f"'Allocate all orders prioritizing {target_name}')."
+            f"Unrecognized facility: '{bad}'. The active supply chain network only operates "
+            f"Plant A, Plant B, and Plant C. Please reference a valid facility (Plant A, B, or C) "
+            f"or provide an operational directive (e.g., 'Plant B capacity drop 30%')."
+        )
+
+    # 2. Intercept bare plant/plan queries lacking an actionable directive (e.g. "Plant A", "Plant B", "Plant Z")
+    bare_plant_match = re.fullmatch(r'(?:plant|plan)\s+([a-zA-Z])', q_lower)
+    if bare_plant_match:
+        letter = bare_plant_match.group(1).upper()
+        if letter not in {"A", "B", "C"}:
+            return False, (
+                f"Unrecognized facility: 'Plant {letter}'. The active supply chain network only operates "
+                f"Plant A, Plant B, and Plant C."
+            )
+        return False, (
+            f"Insufficient information: Ambiguous directive 'Plant {letter}'. "
+            f"Please provide an actionable directive (e.g., 'Plant {letter} loses 30% capacity due to maintenance' or "
+            f"'Explain order O-001 at Plant {letter}')."
+        )
+
+    # 3. Intercept ambiguous/incomplete single-word fragments
+    ambiguous_fragments = {"plant", "orders", "order", "plan"}
+    if q_lower in ambiguous_fragments:
+        return False, (
+            f"Insufficient information: Ambiguous directive '{query}'. "
+            f"Please provide an actionable operational directive (e.g., 'Allocate all orders balancing cost and carbon' "
+            f"or 'Plant B loses 30% capacity')."
         )
 
     has_domain_term = any(term in q_lower for term in DOMAIN_KEYWORDS)
